@@ -48,12 +48,20 @@ def round_to_15min(dt: datetime) -> datetime:
     return dt.replace(minute=minutes, second=0, microsecond=0)
 
 
-def group_by_15min_chunks(messages: List[Tuple], project_filter: Optional[str] = None) -> Dict[str, Dict[str, set]]:
+def group_by_15min_chunks(messages: List[Tuple], project_filter: Optional[str] = None, exclude_filter: Optional[str] = None, group_time: bool = False) -> Dict[str, Dict[str, set]]:
     """
     Group messages into 15-minute chunks per day per project.
+
+    Args:
+        messages: List of (timestamp, session_id, project_name) tuples
+        project_filter: Optional glob pattern to include projects
+        exclude_filter: Optional glob pattern to exclude projects
+        group_time: If True, count unique timeblocks (don't double-count same block for multiple projects)
+
     Returns: {date: {project: {set of 15min time blocks}}}
     """
-    activity = defaultdict(lambda: defaultdict(set))
+    # First pass: collect all activity without filtering
+    all_activity = defaultdict(lambda: defaultdict(set))
 
     for timestamp_str, session_id, project_name in messages:
         try:
@@ -72,16 +80,43 @@ def group_by_15min_chunks(messages: List[Tuple], project_filter: Optional[str] =
             # Clean project name
             project = clean_project_name(project_name)
 
-            # Apply project filter if specified
-            if project_filter and not fnmatch.fnmatch(project.lower(), project_filter.lower()):
-                continue
-
             # Add this 15-min block to the project's activity for this day
-            activity[date_str][project].add(block)
+            all_activity[date_str][project].add(block)
 
         except Exception as e:
             print(f"Warning: Failed to parse timestamp {timestamp_str}: {e}", file=sys.stderr)
             continue
+
+    # Second pass: apply filters at the project level
+    activity = defaultdict(lambda: defaultdict(set))
+
+    for date_str, projects in all_activity.items():
+        for project, blocks in projects.items():
+            # Apply project filter if specified
+            if project_filter and not fnmatch.fnmatch(project.lower(), project_filter.lower()):
+                continue
+
+            # Apply exclude filter if specified
+            if exclude_filter and fnmatch.fnmatch(project.lower(), exclude_filter.lower()):
+                continue
+
+            # This project passes filters, include its blocks
+            activity[date_str][project] = blocks
+
+    # Third pass: if group_time is enabled, merge all timeblocks into a single combined entry
+    if group_time and activity:
+        grouped_activity = defaultdict(lambda: defaultdict(set))
+        for date_str, projects in activity.items():
+            # Collect all unique timeblocks across all projects for this date
+            all_blocks = set()
+            project_names = []
+            for project, blocks in projects.items():
+                all_blocks.update(blocks)
+                project_names.append(project)
+            # Create a combined project name
+            combined_name = "Combined: " + ", ".join(sorted(project_names))
+            grouped_activity[date_str][combined_name] = all_blocks
+        return grouped_activity
 
     return activity
 
@@ -91,7 +126,7 @@ def calculate_hours(time_blocks: set) -> float:
     return len(time_blocks) * 0.25
 
 
-def format_timesheet(activity: Dict[str, Dict[str, set]], since_date: datetime, project_filter: Optional[str] = None) -> str:
+def format_timesheet(activity: Dict[str, Dict[str, set]], since_date: datetime, project_filter: Optional[str] = None, exclude_filter: Optional[str] = None, group_time: bool = False) -> str:
     """Format the timesheet for display."""
     output = []
     output.append("=" * 80)
@@ -105,9 +140,13 @@ def format_timesheet(activity: Dict[str, Dict[str, set]], since_date: datetime, 
     else:
         range_text = f"SINCE {since_date.strftime('%B %d, %Y').upper()}"
 
-    # Add filter to header if specified
+    # Add filters to header if specified
     if project_filter:
         range_text = f"{range_text} - FILTER: {project_filter}"
+    if exclude_filter:
+        range_text = f"{range_text} - EXCLUDE: {exclude_filter}"
+    if group_time:
+        range_text = f"{range_text} - GROUPED TIME"
 
     output.append(f"CLAUDE CODE TIMESHEET - {range_text}")
     output.append("=" * 80)
@@ -185,14 +224,17 @@ Examples:
   %(prog)s                                    # Last 7 days (default)
   %(prog)s 14                                 # Last 14 days
   %(prog)s 20250101                           # Since January 1, 2025
-  %(prog)s --project-filter "*wallfacer*"     # Last 7 days, wallfacer projects only
-  %(prog)s 30 --project-filter "pitch*"       # Last 30 days, pitchfriendly only
+  %(prog)s -p "*acme*"                        # Last 7 days, acme projects only
+  %(prog)s 30 -p "client*"                    # Last 30 days, client projects only
+  %(prog)s -e "*test*"                        # Last 7 days, exclude test projects
+  %(prog)s -p "*api*" -e "*legacy*"           # API projects, excluding legacy
+  %(prog)s -p "*wallfacer*" -e "*Research*" -g  # Wallfacer projects, grouped time
   %(prog)s --db custom.db                     # Use custom database file
 
 Filter Patterns:
-  Use wildcards in --project-filter:
-  - "*wallfacer*"  : Any project with "wallfacer" in the name
-  - "pitch*"       : Projects starting with "pitch"
+  Use wildcards in --project-filter and --exclude-filter:
+  - "*acme*"       : Any project with "acme" in the name
+  - "client*"      : Projects starting with "client"
   - "*backend"     : Projects ending with "backend"
         """
     )
@@ -208,6 +250,20 @@ Filter Patterns:
         '-p',
         metavar='PATTERN',
         help='Filter projects by glob pattern (case-insensitive). Supports wildcards: *, ?'
+    )
+
+    parser.add_argument(
+        '--exclude-filter',
+        '-e',
+        metavar='PATTERN',
+        help='Exclude projects by glob pattern (case-insensitive). Supports wildcards: *, ?'
+    )
+
+    parser.add_argument(
+        '--group-time',
+        '-g',
+        action='store_true',
+        help='Group time by unique timeblocks (don\'t double-count same 15-min block across projects)'
     )
 
     parser.add_argument(
@@ -248,14 +304,22 @@ Filter Patterns:
             return
 
         # Group into 15-minute chunks
-        activity = group_by_15min_chunks(messages, args.project_filter)
+        activity = group_by_15min_chunks(messages, args.project_filter, args.exclude_filter, args.group_time)
 
         if not activity:
-            print(f"No messages found matching filter '{args.project_filter}'.")
+            filter_msg = []
+            if args.project_filter:
+                filter_msg.append(f"filter '{args.project_filter}'")
+            if args.exclude_filter:
+                filter_msg.append(f"exclude '{args.exclude_filter}'")
+            if filter_msg:
+                print(f"No messages found matching {' and '.join(filter_msg)}.")
+            else:
+                print("No messages found.")
             return
 
         # Format and display timesheet
-        timesheet = format_timesheet(activity, since_date, args.project_filter)
+        timesheet = format_timesheet(activity, since_date, args.project_filter, args.exclude_filter, args.group_time)
         print(timesheet)
 
     finally:

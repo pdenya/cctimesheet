@@ -54,11 +54,11 @@ python3 generate_timesheet.py 20251001
 ### Project Filtering
 
 ```bash
-# All wallfacer projects (last 7 days)
-python3 generate_timesheet.py -p "*wallfacer*"
+# All acme projects (last 7 days)
+python3 generate_timesheet.py -p "*acme*"
 
-# Pitchfriendly project since Oct 1
-python3 generate_timesheet.py 20251001 -p "*pitch*"
+# Specific client project since Oct 1
+python3 generate_timesheet.py 20251001 -p "*client*"
 
 # Backend projects (last 30 days)
 python3 generate_timesheet.py 30 --project-filter "*backend"
@@ -67,6 +67,12 @@ python3 generate_timesheet.py 30 --project-filter "*backend"
 ### Advanced Options
 
 ```bash
+# Group time by unique timeblocks (don't double-count same block across projects)
+python3 generate_timesheet.py -p "*client*" -g
+
+# Combine filters with grouped time
+python3 generate_timesheet.py 30 -p "*api*" -e "*test*" --group-time
+
 # Use custom database
 python3 generate_timesheet.py --db ~/timesheets/october.db
 
@@ -114,13 +120,13 @@ The parser extracts these timestamps and indexes them in SQLite for fast queryin
 
 ```
 ================================================================================
-CLAUDE CODE TIMESHEET - SINCE OCTOBER 01, 2025 - FILTER: *wallfacer*
+CLAUDE CODE TIMESHEET - SINCE OCTOBER 01, 2025 - FILTER: *acme*
 ================================================================================
 
 Friday, October 31, 2025
 --------------------------------------------------------------------------------
-  Users/pdenya/Code/wallfacer/monorepo                           4.75 hrs
-  Users/pdenya/Code/wallfacer/droplet                            0.75 hrs
+  Users/pdenya/Code/acme/monorepo                                4.75 hrs
+  Users/pdenya/Code/acme/api                                     0.75 hrs
 
   Daily Total:                                                   5.50 hrs
 
@@ -173,6 +179,9 @@ CREATE INDEX idx_project_name ON messages(project_name);
 
 **Q: Why 15-minute blocks instead of exact time?**
 A: 15-minute blocks provide a standard billing increment and naturally filter out idle time while remaining accurate for professional timesheets.
+
+**Q: What does the `--group-time` flag do?**
+A: By default, if you work on multiple projects during the same 15-minute block, each project counts that block separately. With `--group-time` (`-g`), unique timeblocks are counted only once across all filtered projects, preventing double-counting when multitasking.
 
 **Q: Can I use this for invoicing?**
 A: Yes! The output provides verifiable timestamps and session IDs for audit purposes. Consider adding your own verification process.
