@@ -2,7 +2,7 @@
 Claude Code Timesheet - Generate professional timesheets from Claude Code session history.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "pdenya"
 __license__ = "MIT"
 

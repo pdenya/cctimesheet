@@ -9,13 +9,51 @@ Generate professional timesheets from your [Claude Code](https://claude.com/clau
 
 ## Features
 
-- 📊 **Accurate Time Tracking** - Groups messages into 15-minute activity blocks
-- 📈 **Weekly Summaries** - Automatic weekly totals for easy billing and reporting
-- 🔍 **Project Filtering** - Filter and exclude projects using glob patterns
-- 📅 **Flexible Date Ranges** - View by days ago or specific date ranges
-- 💾 **Smart Database** - Automatic temporary database creation and cleanup
-- 🎯 **Zero Dependencies** - Pure Python 3 standard library
-- 🚀 **Simple CLI** - Single command workflow with comprehensive help
+- **Accurate Time Tracking** - Groups messages into 15-minute activity blocks
+- **Weekly Summaries** - Automatic weekly totals for easy billing and reporting
+- **Project Filtering** - Filter and exclude projects using glob patterns
+- **Flexible Date Ranges** - View by days ago or specific date ranges
+- **Smart Database** - Automatic temporary database creation and cleanup
+- **Simple CLI** - Single command
+
+## Output Example
+
+```
+================================================================================
+CLAUDE CODE TIMESHEET
+================================================================================
+Since October 01, 2025 | Filter: *client-project*
+
+WEEKLY SUMMARY
+--------------------------------------------------------------------------------
+  Oct 27 - Nov 02, 2025                                         19.75 hrs
+  Oct 20 - Oct 26, 2025                                         21.50 hrs
+  Oct 13 - Oct 19, 2025                                          5.25 hrs
+  Oct 06 - Oct 12, 2025                                         11.00 hrs
+
+
+DAILY BREAKDOWN
+--------------------------------------------------------------------------------
+
+Friday, Nov 01, 2025
+
+  client-project/api                                                 3.50 hrs
+  client-project/frontend                                            1.25 hrs
+  ----------------------------------------------------------------- ---------
+  Daily Total                                                        4.75 hrs
+
+Thursday, Oct 31, 2025
+
+  client-project/api                                                 5.00 hrs
+  ----------------------------------------------------------------- ---------
+  Daily Total                                                        5.00 hrs
+
+...
+
+================================================================================
+  TOTAL HOURS                                                       57.50 hrs
+================================================================================
+```
 
 ## Quick Start
 
@@ -127,45 +165,6 @@ Claude Code stores conversation history as JSONL files in `~/.claude/projects/`.
 
 The parser extracts these timestamps and indexes them in SQLite for fast querying.
 
-## Output Example
-
-```
-================================================================================
-CLAUDE CODE TIMESHEET
-================================================================================
-Since October 01, 2025 | Filter: *client-project*
-
-WEEKLY SUMMARY
---------------------------------------------------------------------------------
-  Oct 27 - Nov 02, 2025                                         19.75 hrs
-  Oct 20 - Oct 26, 2025                                         21.50 hrs
-  Oct 13 - Oct 19, 2025                                          5.25 hrs
-  Oct 06 - Oct 12, 2025                                         11.00 hrs
-
-
-DAILY BREAKDOWN
---------------------------------------------------------------------------------
-
-Friday, Nov 01, 2025
-
-  client-project/api                                                 3.50 hrs
-  client-project/frontend                                            1.25 hrs
-  ----------------------------------------------------------------- ---------
-  Daily Total                                                        4.75 hrs
-
-Thursday, Oct 31, 2025
-
-  client-project/api                                                 5.00 hrs
-  ----------------------------------------------------------------- ---------
-  Daily Total                                                        5.00 hrs
-
-...
-
-================================================================================
-  TOTAL HOURS                                                       57.50 hrs
-================================================================================
-```
-
 ## Maintenance
 
 ### How the Database Works
@@ -227,7 +226,7 @@ A: 15-minute blocks provide a standard billing increment and naturally filter ou
 A: Weeks start on Monday and end on Sunday. The timesheet groups all activity within each week and displays the total hours for that week range. This makes it easy to see weekly billing totals at a glance.
 
 **Q: What does the `--group-time` flag do?**
-A: By default, if you work on multiple projects during the same 15-minute block, each project counts that block separately. With `--group-time` (`-g`), unique timeblocks are counted only once across all filtered projects, preventing double-counting when multitasking.
+A: By default, if you work on multiple projects during the same 15-minute block, each project counts that block separately. With `--group-time` (`-g`), unique timeblocks are counted only once across all filtered projects, preventing double-counting when multitasking.  This is useful when you're **working for the same client across multiple directories**
 
 **Q: Can I use this for invoicing?**
 A: Yes! The output provides verifiable timestamps and session IDs for audit purposes. Consider adding your own verification process.
@@ -254,6 +253,19 @@ pip install -e .
 
 # Run the command
 cctimesheet --help
+```
+
+### Publishing to PyPI
+
+```bash
+# Install build and twine
+pip install build twine
+
+# Build the package
+python3 -m build
+
+# Upload to PyPI (requires API token)
+twine upload dist/*
 ```
 
 ## Contributing
