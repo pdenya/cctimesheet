@@ -3,14 +3,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-Generate professional timesheets from your [Claude Code](https://claude.com/claude-code) session history. Automatically track billable hours across projects with intelligent activity grouping.
+Generate professional timesheets from your [Claude Code](https://claude.com/claude-code) session history. Automatically track billable hours across projects with intelligent activity grouping and weekly summaries.
 
-**One command does it all**: `cctimesheet` automatically parses your Claude Code messages and generates a timesheet—no manual database setup required.
+**One command does it all**: `cctimesheet` automatically parses your Claude Code messages and generates a formatted timesheet with weekly totals and daily breakdowns—no manual database setup required.
 
 ## Features
 
 - 📊 **Accurate Time Tracking** - Groups messages into 15-minute activity blocks
-- 🔍 **Project Filtering** - Filter timesheets by project using glob patterns
+- 📈 **Weekly Summaries** - Automatic weekly totals for easy billing and reporting
+- 🔍 **Project Filtering** - Filter and exclude projects using glob patterns
 - 📅 **Flexible Date Ranges** - View by days ago or specific date ranges
 - 💾 **Smart Database** - Automatic temporary database creation and cleanup
 - 🎯 **Zero Dependencies** - Pure Python 3 standard library
@@ -68,15 +69,22 @@ cctimesheet 20251001 -p "*client*"
 cctimesheet 30 --project-filter "*backend"
 ```
 
-### Advanced Options
+### Advanced Filtering
 
 ```bash
+# Exclude specific projects
+cctimesheet -p "*client*" -e "*test*"
+
 # Group time by unique timeblocks (don't double-count same block across projects)
 cctimesheet -p "*client*" -g
 
 # Combine filters with grouped time
 cctimesheet 30 -p "*api*" -e "*test*" --group-time
+```
 
+### Database Options
+
+```bash
 # Use persistent database for faster subsequent runs
 cctimesheet --db ~/timesheets/october.db --keep-db
 
@@ -123,20 +131,38 @@ The parser extracts these timestamps and indexes them in SQLite for fast queryin
 
 ```
 ================================================================================
-CLAUDE CODE TIMESHEET - SINCE OCTOBER 01, 2025 - FILTER: *acme*
+CLAUDE CODE TIMESHEET
 ================================================================================
+Since October 01, 2025 | Filter: *client-project*
 
-Friday, October 31, 2025
+WEEKLY SUMMARY
 --------------------------------------------------------------------------------
-  Users/pdenya/Code/acme/monorepo                                4.75 hrs
-  Users/pdenya/Code/acme/api                                     0.75 hrs
+  Oct 27 - Nov 02, 2025                                         19.75 hrs
+  Oct 20 - Oct 26, 2025                                         21.50 hrs
+  Oct 13 - Oct 19, 2025                                          5.25 hrs
+  Oct 06 - Oct 12, 2025                                         11.00 hrs
 
-  Daily Total:                                                   5.50 hrs
+
+DAILY BREAKDOWN
+--------------------------------------------------------------------------------
+
+Friday, Nov 01, 2025
+
+  client-project/api                                                 3.50 hrs
+  client-project/frontend                                            1.25 hrs
+  ----------------------------------------------------------------- ---------
+  Daily Total                                                        4.75 hrs
+
+Thursday, Oct 31, 2025
+
+  client-project/api                                                 5.00 hrs
+  ----------------------------------------------------------------- ---------
+  Daily Total                                                        5.00 hrs
 
 ...
 
 ================================================================================
-  TOTAL HOURS:                                                  28.75 hrs
+  TOTAL HOURS                                                       57.50 hrs
 ================================================================================
 ```
 
@@ -197,6 +223,9 @@ CREATE INDEX idx_project_name ON messages(project_name);
 **Q: Why 15-minute blocks instead of exact time?**
 A: 15-minute blocks provide a standard billing increment and naturally filter out idle time while remaining accurate for professional timesheets.
 
+**Q: How are weekly summaries calculated?**
+A: Weeks start on Monday and end on Sunday. The timesheet groups all activity within each week and displays the total hours for that week range. This makes it easy to see weekly billing totals at a glance.
+
 **Q: What does the `--group-time` flag do?**
 A: By default, if you work on multiple projects during the same 15-minute block, each project counts that block separately. With `--group-time` (`-g`), unique timeblocks are counted only once across all filtered projects, preventing double-counting when multitasking.
 
@@ -208,6 +237,24 @@ A: No. The tool only reads JSONL files. All data is temporarily stored (or in a 
 
 **Q: What if I have multiple Claude Code installations?**
 A: Use `--projects-dir` to specify the location of your `.claude/projects` directory.
+
+## Development
+
+```bash
+# Clone the repository
+git clone https://github.com/pdenya/cctimesheet.git
+cd cctimesheet
+
+# Create a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in editable mode
+pip install -e .
+
+# Run the command
+cctimesheet --help
+```
 
 ## Contributing
 

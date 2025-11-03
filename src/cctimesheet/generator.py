@@ -37,6 +37,12 @@ def clean_project_name(project_name: str) -> str:
     project_name = project_name.replace('-Users-pdenya-', '~/')
     project_name = project_name.replace('-', '/')
 
+    # Strip common prefixes for cleaner display
+    if project_name.startswith('Users/pdenya/Code/'):
+        project_name = project_name[18:]  # len('Users/pdenya/Code/')
+    elif project_name.startswith('Users/pdenya/'):
+        project_name = '~/' + project_name[13:]  # len('Users/pdenya/')
+
     return project_name
 
 
@@ -112,7 +118,10 @@ def group_by_15min_chunks(messages: List[Tuple], project_filter: Optional[str] =
                 all_blocks.update(blocks)
                 project_names.append(project)
             # Create a combined project name
-            combined_name = "Combined: " + ", ".join(sorted(project_names))
+            if len(project_names) == 1:
+                combined_name = project_names[0]
+            else:
+                combined_name = "Multiple projects: " + ", ".join(sorted(project_names))
             grouped_activity[date_str][combined_name] = all_blocks
         return grouped_activity
 
@@ -124,36 +133,97 @@ def calculate_hours(time_blocks: set) -> float:
     return len(time_blocks) * 0.25
 
 
+def get_week_start(date_obj: datetime) -> datetime:
+    """Get the Monday of the week for a given date."""
+    # 0 = Monday, 6 = Sunday
+    days_since_monday = date_obj.weekday()
+    return date_obj - timedelta(days=days_since_monday)
+
+
+def calculate_weekly_summaries(activity: Dict[str, Dict[str, set]]) -> List[Tuple[datetime, datetime, float]]:
+    """
+    Calculate weekly summaries from activity data.
+
+    Returns: List of (week_start, week_end, total_hours) tuples, sorted newest first
+    """
+    weekly_totals = defaultdict(float)
+
+    for date_str, projects in activity.items():
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        week_start = get_week_start(date_obj)
+
+        # Calculate total hours for this day
+        day_total = sum(calculate_hours(blocks) for blocks in projects.values())
+        weekly_totals[week_start] += day_total
+
+    # Convert to list of tuples with week ranges
+    weekly_summary = []
+    for week_start, total_hours in weekly_totals.items():
+        week_end = week_start + timedelta(days=6)
+        weekly_summary.append((week_start, week_end, total_hours))
+
+    # Sort by week start (newest first)
+    weekly_summary.sort(key=lambda x: x[0], reverse=True)
+
+    return weekly_summary
+
+
 def format_timesheet(activity: Dict[str, Dict[str, set]], since_date: datetime, project_filter: Optional[str] = None, exclude_filter: Optional[str] = None, group_time: bool = False) -> str:
     """Format the timesheet for display."""
     output = []
+
+    # Header
+    output.append("")
+    output.append("=" * 80)
+    output.append("CLAUDE CODE TIMESHEET")
     output.append("=" * 80)
 
-    # Calculate date range for header
+    # Calculate date range for subheader
     days_ago = (datetime.now() - since_date).days
     if days_ago <= 1:
-        range_text = "TODAY"
+        range_text = "Today"
     elif days_ago <= 7:
-        range_text = f"LAST {days_ago} DAYS"
+        range_text = f"Last {days_ago} days"
     else:
-        range_text = f"SINCE {since_date.strftime('%B %d, %Y').upper()}"
+        range_text = f"Since {since_date.strftime('%B %d, %Y')}"
 
-    # Add filters to header if specified
+    # Add filters to subheader
+    filters = []
     if project_filter:
-        range_text = f"{range_text} - FILTER: {project_filter}"
+        filters.append(f"Filter: {project_filter}")
     if exclude_filter:
-        range_text = f"{range_text} - EXCLUDE: {exclude_filter}"
+        filters.append(f"Exclude: {exclude_filter}")
     if group_time:
-        range_text = f"{range_text} - GROUPED TIME"
+        filters.append("Grouped time")
 
-    output.append(f"CLAUDE CODE TIMESHEET - {range_text}")
-    output.append("=" * 80)
+    if filters:
+        range_text += " | " + " | ".join(filters)
+
+    output.append(range_text)
     output.append("")
 
-    # Sort dates
-    sorted_dates = sorted(activity.keys(), reverse=True)
+    # Calculate weekly summaries
+    weekly_summaries = calculate_weekly_summaries(activity)
 
-    grand_total_hours = 0
+    # Display weekly summaries
+    if len(weekly_summaries) > 1:
+        output.append("WEEKLY SUMMARY")
+        output.append("-" * 80)
+        for week_start, week_end, total_hours in weekly_summaries:
+            week_range = f"{week_start.strftime('%b %d')} - {week_end.strftime('%b %d, %Y')}"
+            output.append(f"  {week_range:<60} {total_hours:>6.2f} hrs")
+        output.append("")
+        output.append("")
+
+    # Calculate grand total
+    grand_total_hours = sum(hours for _, _, hours in weekly_summaries)
+
+    # Display daily breakdown
+    output.append("DAILY BREAKDOWN")
+    output.append("-" * 80)
+
+    # Sort dates newest first
+    sorted_dates = sorted(activity.keys(), reverse=True)
 
     for date_str in sorted_dates:
         projects = activity[date_str]
@@ -161,10 +231,11 @@ def format_timesheet(activity: Dict[str, Dict[str, set]], since_date: datetime, 
         # Parse date for nice formatting
         date_obj = datetime.strptime(date_str, '%Y-%m-%d')
         day_name = date_obj.strftime('%A')
-        formatted_date = date_obj.strftime('%B %d, %Y')
+        formatted_date = date_obj.strftime('%b %d, %Y')
 
+        output.append("")
         output.append(f"{day_name}, {formatted_date}")
-        output.append("-" * 80)
+        output.append("")
 
         # Sort projects by hours (descending)
         project_hours = [(proj, calculate_hours(blocks)) for proj, blocks in projects.items()]
@@ -173,18 +244,18 @@ def format_timesheet(activity: Dict[str, Dict[str, set]], since_date: datetime, 
         day_total = 0
 
         for project, hours in project_hours:
-            output.append(f"  {project:<60} {hours:>6.2f} hrs")
+            output.append(f"  {project:<65} {hours:>5.2f} hrs")
             day_total += hours
 
-        output.append("")
-        output.append(f"  {'Daily Total:':<60} {day_total:>6.2f} hrs")
-        output.append("")
+        output.append(f"  {'-' * 65} {'-' * 9}")
+        output.append(f"  {'Daily Total':<65} {day_total:>5.2f} hrs")
 
-        grand_total_hours += day_total
-
+    # Grand total
+    output.append("")
     output.append("=" * 80)
-    output.append(f"  {'TOTAL HOURS:':<60} {grand_total_hours:>6.2f} hrs")
+    output.append(f"  {'TOTAL HOURS':<65} {grand_total_hours:>5.2f} hrs")
     output.append("=" * 80)
+    output.append("")
 
     return "\n".join(output)
 
