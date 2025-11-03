@@ -3,9 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-Generate professional timesheets from your [Claude Code](https://claude.com/claude-code) session history. Automatically track billable hours across projects with intelligent activity grouping and weekly summaries.
-
-**One command does it all**: `cctimesheet` automatically parses your Claude Code messages and generates a formatted timesheet with weekly totals and daily breakdowns—no manual database setup required.
+Pull timesheet data from your [Claude Code](https://claude.com/claude-code) session history. Easily track billable hours across projects with activity grouping and weekly summaries.
 
 ## Features
 
@@ -13,8 +11,6 @@ Generate professional timesheets from your [Claude Code](https://claude.com/clau
 - **Weekly Summaries** - Automatic weekly totals for easy billing and reporting
 - **Project Filtering** - Filter and exclude projects using glob patterns
 - **Flexible Date Ranges** - View by days ago or specific date ranges
-- **Smart Database** - Automatic temporary database creation and cleanup
-- **Simple CLI** - Single command
 
 ## Output Example
 
@@ -48,7 +44,7 @@ Thursday, Oct 31, 2025
   ----------------------------------------------------------------- ---------
   Daily Total                                                        5.00 hrs
 
-...
+[...]
 
 ================================================================================
   TOTAL HOURS                                                       57.50 hrs
@@ -57,24 +53,16 @@ Thursday, Oct 31, 2025
 
 ## Quick Start
 
-### Installation with pipx (Recommended)
-
 ```bash
-# Install directly from GitHub
-pipx install git+https://github.com/pdenya/cctimesheet.git
-
-# Or install from local clone
-git clone https://github.com/pdenya/cctimesheet.git
-cd cctimesheet
-pipx install .
+pipx run cctimesheet
 ```
 
-No additional dependencies required - uses Python 3 standard library only.
-
-### Alternative: Install with pip
+### Or Install Permanently
 
 ```bash
-pip install git+https://github.com/pdenya/cctimesheet.git
+pipx install cctimesheet
+# Or with pip
+pip install cctimesheet
 ```
 
 ## Usage Examples
@@ -85,52 +73,33 @@ The `cctimesheet` command automatically parses your Claude Code messages and gen
 
 ```bash
 # Last 7 days (default)
-cctimesheet
+pipx run cctimesheet
 
 # Last 14 days
-cctimesheet 14
+pipx run cctimesheet 14
 
 # Since October 1, 2025
-cctimesheet 20251001
+pipx run cctimesheet 20251001
 ```
 
-### Project Filtering
+### Project/Client Filtering
 
 ```bash
-# All acme projects (last 7 days)
-cctimesheet -p "*acme*"
-
-# Specific client project since Oct 1
-cctimesheet 20251001 -p "*client*"
-
-# Backend projects (last 30 days)
-cctimesheet 30 --project-filter "*backend"
+# Only acme projects (directory filtering)
+# -p is include (project filter), -e is exclude
+# -g to group time, no double counting hours
+pipx run cctimesheet -p "*acme*" -e "*unrelated-project-name*" -g
 ```
 
-### Advanced Filtering
+### Options
 
 ```bash
-# Exclude specific projects
-cctimesheet -p "*client*" -e "*test*"
 
-# Group time by unique timeblocks (don't double-count same block across projects)
-cctimesheet -p "*client*" -g
-
-# Combine filters with grouped time
-cctimesheet 30 -p "*api*" -e "*test*" --group-time
-```
-
-### Database Options
-
-```bash
-# Use persistent database for faster subsequent runs
-cctimesheet --db ~/timesheets/october.db --keep-db
-
-# Parse from custom location
-cctimesheet --projects-dir /path/to/projects
-
-# View help
-cctimesheet --help
+pipx run cctimesheet \
+  # Use persistent database for faster subsequent runs
+  --db ~/timesheets/october.db --keep-db \
+  # Parse from custom claude code projects location
+  --projects-dir /path/to/projects
 ```
 
 ## How It Works
@@ -173,24 +142,6 @@ By default, `cctimesheet` creates a temporary database each time you run it. The
 - ✅ No manual database management required
 - ✅ Always uses the latest Claude Code data
 - ✅ No leftover files to clean up
-
-### Using a Persistent Database (Optional)
-
-For faster repeated queries, you can use a persistent database:
-
-```bash
-# First run creates the database
-cctimesheet --db my_timesheet.db --keep-db
-
-# Subsequent runs are faster (reuses existing data)
-cctimesheet --db my_timesheet.db
-
-# To refresh with new sessions, delete and recreate
-rm my_timesheet.db
-cctimesheet --db my_timesheet.db --keep-db
-```
-
-The import process typically takes a few seconds for hundreds of sessions.
 
 ### Database Schema
 
