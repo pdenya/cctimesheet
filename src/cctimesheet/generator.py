@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
 """
 Generate a timesheet from Claude Code messages.
 Groups activity into 15-minute chunks per project per day.
 """
 
-import argparse
 import sqlite3
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -209,122 +207,59 @@ def parse_date_arg(arg: str) -> Optional[datetime]:
     return None
 
 
-def main():
-    """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Generate timesheets from Claude Code message history. Groups activity into 15-minute blocks.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Date/Range Options:
-  You can specify a date range in two ways:
-  - Number of days: Use an integer (e.g., 7, 14, 30)
-  - Since date: Use YYYYMMDD format (e.g., 20250101)
+def generate_timesheet(db_path: str, date_or_days: Optional[str] = None, project_filter: Optional[str] = None, exclude_filter: Optional[str] = None, group_time: bool = False) -> str:
+    """
+    Generate a timesheet from the database.
 
-Examples:
-  %(prog)s                                    # Last 7 days (default)
-  %(prog)s 14                                 # Last 14 days
-  %(prog)s 20250101                           # Since January 1, 2025
-  %(prog)s -p "*acme*"                        # Last 7 days, acme projects only
-  %(prog)s 30 -p "client*"                    # Last 30 days, client projects only
-  %(prog)s -e "*test*"                        # Last 7 days, exclude test projects
-  %(prog)s -p "*api*" -e "*legacy*"           # API projects, excluding legacy
-  %(prog)s -p "*wallfacer*" -e "*Research*" -g  # Wallfacer projects, grouped time
-  %(prog)s --db custom.db                     # Use custom database file
+    Args:
+        db_path: Path to SQLite database file
+        date_or_days: Number of days ago or YYYYMMDD date string (default: 7 days)
+        project_filter: Optional glob pattern to filter projects
+        exclude_filter: Optional glob pattern to exclude projects
+        group_time: If True, count unique timeblocks across all projects
 
-Filter Patterns:
-  Use wildcards in --project-filter and --exclude-filter:
-  - "*acme*"       : Any project with "acme" in the name
-  - "client*"      : Projects starting with "client"
-  - "*backend"     : Projects ending with "backend"
-        """
-    )
-
-    parser.add_argument(
-        'date_or_days',
-        nargs='?',
-        help='Number of days ago (e.g., 7) or date in YYYYMMDD format (e.g., 20250101). Default: 7 days'
-    )
-
-    parser.add_argument(
-        '--project-filter',
-        '-p',
-        metavar='PATTERN',
-        help='Filter projects by glob pattern (case-insensitive). Supports wildcards: *, ?'
-    )
-
-    parser.add_argument(
-        '--exclude-filter',
-        '-e',
-        metavar='PATTERN',
-        help='Exclude projects by glob pattern (case-insensitive). Supports wildcards: *, ?'
-    )
-
-    parser.add_argument(
-        '--group-time',
-        '-g',
-        action='store_true',
-        help='Group time by unique timeblocks (don\'t double-count same 15-min block across projects)'
-    )
-
-    parser.add_argument(
-        '--db',
-        default='claude_messages.db',
-        help='Database file path (default: claude_messages.db)'
-    )
-
-    args = parser.parse_args()
-
+    Returns:
+        Formatted timesheet string
+    """
     # Connect to database
     try:
-        conn = sqlite3.connect(args.db)
+        conn = sqlite3.connect(db_path)
     except sqlite3.Error as e:
-        print(f"Error: Could not connect to database {args.db}: {e}", file=sys.stderr)
-        print(f"Have you run parse_claude_messages.py to import data?", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"Could not connect to database {db_path}: {e}")
 
     try:
         # Parse date/days argument
         since_date = datetime.now() - timedelta(days=7)
 
-        if args.date_or_days:
-            parsed = parse_date_arg(args.date_or_days)
+        if date_or_days:
+            parsed = parse_date_arg(date_or_days)
             if parsed:
                 since_date = parsed
             else:
-                print(f"Error: Invalid argument '{args.date_or_days}'.", file=sys.stderr)
-                print(f"Use a number of days (e.g., 7) or date in YYYYMMDD format (e.g., 20250101)", file=sys.stderr)
-                sys.exit(1)
+                raise ValueError(f"Invalid argument '{date_or_days}'. Use a number of days (e.g., 7) or date in YYYYMMDD format (e.g., 20250101)")
 
         # Fetch messages since date
         messages = get_messages_since_date(conn, since_date)
 
         if not messages:
-            print(f"No messages found since {since_date.strftime('%Y-%m-%d')}.")
-            print(f"Database: {args.db}")
-            return
+            return f"No messages found since {since_date.strftime('%Y-%m-%d')}."
 
         # Group into 15-minute chunks
-        activity = group_by_15min_chunks(messages, args.project_filter, args.exclude_filter, args.group_time)
+        activity = group_by_15min_chunks(messages, project_filter, exclude_filter, group_time)
 
         if not activity:
             filter_msg = []
-            if args.project_filter:
-                filter_msg.append(f"filter '{args.project_filter}'")
-            if args.exclude_filter:
-                filter_msg.append(f"exclude '{args.exclude_filter}'")
+            if project_filter:
+                filter_msg.append(f"filter '{project_filter}'")
+            if exclude_filter:
+                filter_msg.append(f"exclude '{exclude_filter}'")
             if filter_msg:
-                print(f"No messages found matching {' and '.join(filter_msg)}.")
+                return f"No messages found matching {' and '.join(filter_msg)}."
             else:
-                print("No messages found.")
-            return
+                return "No messages found."
 
-        # Format and display timesheet
-        timesheet = format_timesheet(activity, since_date, args.project_filter, args.exclude_filter, args.group_time)
-        print(timesheet)
+        # Format and return timesheet
+        return format_timesheet(activity, since_date, project_filter, exclude_filter, group_time)
 
     finally:
         conn.close()
-
-
-if __name__ == "__main__":
-    main()

@@ -5,83 +5,86 @@
 
 Generate professional timesheets from your [Claude Code](https://claude.com/claude-code) session history. Automatically track billable hours across projects with intelligent activity grouping.
 
+**One command does it all**: `cctimesheet` automatically parses your Claude Code messages and generates a timesheet—no manual database setup required.
+
 ## Features
 
 - 📊 **Accurate Time Tracking** - Groups messages into 15-minute activity blocks
 - 🔍 **Project Filtering** - Filter timesheets by project using glob patterns
 - 📅 **Flexible Date Ranges** - View by days ago or specific date ranges
-- 💾 **SQLite Storage** - Fast, local database with indexed queries
+- 💾 **Smart Database** - Automatic temporary database creation and cleanup
 - 🎯 **Zero Dependencies** - Pure Python 3 standard library
-- 🚀 **Simple CLI** - Intuitive command-line interface with comprehensive help
+- 🚀 **Simple CLI** - Single command workflow with comprehensive help
 
 ## Quick Start
 
-### Installation
+### Installation with pipx (Recommended)
 
 ```bash
+# Install directly from GitHub
+pipx install git+https://github.com/pdenya/cctimesheet.git
+
+# Or install from local clone
 git clone https://github.com/pdenya/cctimesheet.git
 cd cctimesheet
-chmod +x parse_claude_messages.py generate_timesheet.py
+pipx install .
 ```
 
 No additional dependencies required - uses Python 3 standard library only.
 
-### First-Time Setup
-
-Import your Claude Code conversation history:
+### Alternative: Install with pip
 
 ```bash
-python3 parse_claude_messages.py
+pip install git+https://github.com/pdenya/cctimesheet.git
 ```
 
-This scans `~/.claude/projects/` and imports all message timestamps into `claude_messages.db`.
-
 ## Usage Examples
+
+The `cctimesheet` command automatically parses your Claude Code messages and generates a timesheet in one step.
 
 ### Basic Timesheets
 
 ```bash
 # Last 7 days (default)
-python3 generate_timesheet.py
+cctimesheet
 
 # Last 14 days
-python3 generate_timesheet.py 14
+cctimesheet 14
 
 # Since October 1, 2025
-python3 generate_timesheet.py 20251001
+cctimesheet 20251001
 ```
 
 ### Project Filtering
 
 ```bash
 # All acme projects (last 7 days)
-python3 generate_timesheet.py -p "*acme*"
+cctimesheet -p "*acme*"
 
 # Specific client project since Oct 1
-python3 generate_timesheet.py 20251001 -p "*client*"
+cctimesheet 20251001 -p "*client*"
 
 # Backend projects (last 30 days)
-python3 generate_timesheet.py 30 --project-filter "*backend"
+cctimesheet 30 --project-filter "*backend"
 ```
 
 ### Advanced Options
 
 ```bash
 # Group time by unique timeblocks (don't double-count same block across projects)
-python3 generate_timesheet.py -p "*client*" -g
+cctimesheet -p "*client*" -g
 
 # Combine filters with grouped time
-python3 generate_timesheet.py 30 -p "*api*" -e "*test*" --group-time
+cctimesheet 30 -p "*api*" -e "*test*" --group-time
 
-# Use custom database
-python3 generate_timesheet.py --db ~/timesheets/october.db
+# Use persistent database for faster subsequent runs
+cctimesheet --db ~/timesheets/october.db --keep-db
 
-# Import from custom location
-python3 parse_claude_messages.py --projects-dir /path/to/projects
+# Parse from custom location
+cctimesheet --projects-dir /path/to/projects
 
 # View help
-python3 generate_timesheet.py --help
-python3 parse_claude_messages.py --help
+cctimesheet --help
 ```
 
 ## How It Works
@@ -139,13 +142,27 @@ Friday, October 31, 2025
 
 ## Maintenance
 
-### Updating Your Data
+### How the Database Works
 
-To refresh the database with new Claude Code sessions:
+By default, `cctimesheet` creates a temporary database each time you run it. The database is automatically cleaned up after generating the timesheet. This means:
+- ✅ No manual database management required
+- ✅ Always uses the latest Claude Code data
+- ✅ No leftover files to clean up
+
+### Using a Persistent Database (Optional)
+
+For faster repeated queries, you can use a persistent database:
 
 ```bash
-rm claude_messages.db
-python3 parse_claude_messages.py
+# First run creates the database
+cctimesheet --db my_timesheet.db --keep-db
+
+# Subsequent runs are faster (reuses existing data)
+cctimesheet --db my_timesheet.db
+
+# To refresh with new sessions, delete and recreate
+rm my_timesheet.db
+cctimesheet --db my_timesheet.db --keep-db
 ```
 
 The import process typically takes a few seconds for hundreds of sessions.
@@ -187,7 +204,7 @@ A: By default, if you work on multiple projects during the same 15-minute block,
 A: Yes! The output provides verifiable timestamps and session IDs for audit purposes. Consider adding your own verification process.
 
 **Q: Does this modify my Claude Code data?**
-A: No. The tool only reads JSONL files. All data is stored separately in `claude_messages.db`.
+A: No. The tool only reads JSONL files. All data is temporarily stored (or in a separate database if --db is used).
 
 **Q: What if I have multiple Claude Code installations?**
 A: Use `--projects-dir` to specify the location of your `.claude/projects` directory.
